@@ -428,13 +428,21 @@ export default function App() {
   };
 
   // Auth Operations
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginUser || !loginPass) {
       setAuthError("Please fill in all security fields.");
       return;
     }
-    const foundUser = users.find(u => u.username.toLowerCase() === loginUser.toLowerCase());
+    const response = await fetch(
+      "https://smartcampus-backend-eubv.onrender.com/api/users"
+    );
+
+    const allUsers = await response.json();
+
+    const foundUser = allUsers.find(
+      (u: any) => u.username.toLowerCase() === loginUser.toLowerCase()
+    );
     if (!foundUser) {
       setAuthError("Credentials invalid. Check your username or choose to Register.");
       return;
