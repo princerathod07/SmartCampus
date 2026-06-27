@@ -199,7 +199,8 @@ export default function App() {
       setDbLoading(true);
       try {
         // --- Books ---
-        const booksRes = await fetch("/api/books");
+        const API = "https://smartcampus-backend.onrender.com";
+        const booksRes = await fetch(`${API}/api/books`);
         if (booksRes.ok) {
           const data = await booksRes.json();
           setBooks(data.map((b: any) => ({
@@ -215,7 +216,8 @@ export default function App() {
         }
 
         // --- Announcements ---
-        const annRes = await fetch("/api/announcements");
+        const ANN = "https://smartcampus-backend.onrender.com";
+        const annRes = await fetch(`${ANN}/api/announcements`);
         if (annRes.ok) {
           const data = await annRes.json();
           setAnnouncements(data.map((a: any) => ({
@@ -229,7 +231,8 @@ export default function App() {
         }
 
         // --- Assignments ---
-        const asgRes = await fetch("/api/assignments");
+        const ASS = "https://smartcampus-backend.onrender.com";
+        const asgRes = await fetch(`${ASS}/api/assignments`);
         if (asgRes.ok) {
           const data = await asgRes.json();
           setAssignments(data.map((a: any) => ({
@@ -245,7 +248,8 @@ export default function App() {
         }
 
         // --- Complaints ---
-        const cmpRes = await fetch("/api/complaints");
+        const CMP = "https://smartcampus-backend.onrender.com";
+        const cmpRes = await fetch(`${CMP}/api/complaints`);
         if (cmpRes.ok) {
           const data = await cmpRes.json();
           setComplaints(data.map((c: any) => ({
@@ -261,7 +265,8 @@ export default function App() {
         }
 
         // --- Users ---
-        const usersRes = await fetch("/api/users");
+        const usr = "https://smartcampus-backend.onrender.com";
+        const usersRes = await fetch(`${usr}/api/users`);
         if (usersRes.ok) {
           const uData = await usersRes.json();
           const dbUsers = uData.map((u: any) => {
