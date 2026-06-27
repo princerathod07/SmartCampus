@@ -52,9 +52,6 @@ A full-stack web application built using modern web technologies with a separate
 
 ### Frontend (.env)
 ```
-
-NEXT\_PUBLIC\_API\_URL="https://smartcampus-backend-eubv.onrender.com"
-
 PORT=5000
 SUPABASE_URL=https://*****
 SUPABASE_SERVICE_ROLE_KEY=sb_sec****
@@ -73,18 +70,18 @@ npm install
 npm start
 
 ###🌐 Deployment
-Frontend (Vercel)
-  Connect GitHub repo to Vercel
-  Add environment variables
-  Deploy automatically on push
-Backend (Render)
-  Connect repository or backend folder
-  Set build & start commands
-  Add environment variables
-Database (Supabase)
-  Create project in Supabase
-  Configure tables and relationships
-  Enable authentication if required
+Frontend (Vercel)<br>
+  Connect GitHub repo to Vercel<br>
+  Add environment variables<br>
+  Deploy automatically on push<br>
+Backend (Render)<br>
+  Connect repository or backend folder<br>
+  Set build & start commands<br>
+  Add environment variables<br>
+Database (Supabase)<br>
+  Create project in Supabase<br>
+  Configure tables and relationships<br>
+  Enable authentication if required<br>
 
 👨‍💻 Author
 Prince Rathod
