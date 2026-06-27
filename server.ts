@@ -1,6 +1,7 @@
 import { supabase } from "./config/supabase";
 
 import express from "express";
+import cors from "cors";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -20,8 +21,9 @@ function simulateCampusFAQ(q: string): string {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
+  app.use(cors());
   app.use(express.json());
 
   // =========================
