@@ -932,7 +932,7 @@ export default function App() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Password</label>
-                  <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} required placeholder="Enter password (e.g. student123 or admin123)" className="w-full px-4 py-3 bg-slate-900/60 border border-slate-800 rounded-xl text-sm text-slate-200 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600" />
+                  <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} required placeholder="Enter password (e.g. student123)" className="w-full px-4 py-3 bg-slate-900/60 border border-slate-800 rounded-xl text-sm text-slate-200 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600" />
                 </div>
                 <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-bold text-sm transition-all duration-200 hover:shadow-indigo-500/20 hover:shadow-lg mt-2 cursor-pointer">Access Dashboard</button>
 
