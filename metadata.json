@@ -1,0 +1,6 @@
+{
+  "name": "SmartCampus Assistant",
+  "description": "An elegant, highly interactive, and professional college portal designed with dual student-admin dashboards, campus guides, weekly schedules, a library manager, and an AI chat assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
