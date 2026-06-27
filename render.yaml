@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: smartcampus-backend
+    env: node
+    buildCommand: npm install && npm run build:server
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Don't forget to add your SUPABASE_URL, SUPABASE_ANON_KEY and GEMINI_API_KEY in the Render dashboard!

@@ -95,6 +95,8 @@ interface ChatMessage {
 }
 
 export default function App() {
+  const API_BASE = import.meta.env.VITE_API_URL || '';
+
   // Session & Authentication
   const [session, setSession] = useState<UserProfile | null>(() => {
     const saved = sessionStorage.getItem("sca_session");
@@ -199,8 +201,7 @@ export default function App() {
       setDbLoading(true);
       try {
         // --- Books ---
-        const API = "https://smartcampus-backend-eubv.onrender.com";
-        const booksRes = await fetch(`${API}/api/books`);
+        const booksRes = await fetch(`${API_BASE}/api/books`);
         if (booksRes.ok) {
           const data = await booksRes.json();
           setBooks(data.map((b: any) => ({
@@ -216,8 +217,7 @@ export default function App() {
         }
 
         // --- Announcements ---
-        const ANN = "https://smartcampus-backend-eubv.onrender.com";
-        const annRes = await fetch(`${ANN}/api/announcements`);
+        const annRes = await fetch(`${API_BASE}/api/announcements`);
         if (annRes.ok) {
           const data = await annRes.json();
           setAnnouncements(data.map((a: any) => ({
@@ -231,8 +231,7 @@ export default function App() {
         }
 
         // --- Assignments ---
-        const ASS = "https://smartcampus-backend-eubv.onrender.com";
-        const asgRes = await fetch(`${ASS}/api/assignments`);
+        const asgRes = await fetch(`${API_BASE}/api/assignments`);
         if (asgRes.ok) {
           const data = await asgRes.json();
           setAssignments(data.map((a: any) => ({
@@ -248,8 +247,7 @@ export default function App() {
         }
 
         // --- Complaints ---
-        const CMP = "https://smartcampus-backend-eubv.onrender.com";
-        const cmpRes = await fetch(`${CMP}/api/complaints`);
+        const cmpRes = await fetch(`${API_BASE}/api/complaints`);
         if (cmpRes.ok) {
           const data = await cmpRes.json();
           setComplaints(data.map((c: any) => ({
@@ -265,8 +263,7 @@ export default function App() {
         }
 
         // --- Users ---
-        const usr = "https://smartcampus-backend-eubv.onrender.com";
-        const usersRes = await fetch(`${usr}/api/users`);
+        const usersRes = await fetch(`${API_BASE}/api/users`);
         if (usersRes.ok) {
           const uData = await usersRes.json();
           const dbUsers = uData.map((u: any) => {
@@ -435,7 +432,7 @@ export default function App() {
       return;
     }
     const response = await fetch(
-      "https://smartcampus-backend-eubv.onrender.com/api/users"
+      `${API_BASE}/api/users`
     );
 
     const allUsers = await response.json();
@@ -485,7 +482,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/api/users", {
+      const res = await fetch(`${API_BASE}/api/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -567,7 +564,7 @@ export default function App() {
     setComplaints(prev => prev.map(c => c.id === compId ? { ...c, status, remark } : c));
     try {
       const supabaseStatus = status === "PENDING" ? "Pending" : status === "RESOLVED" ? "Resolved" : "Reviewing";
-      const res = await fetch(`/api/complaints/${compId}`, {
+      const res = await fetch(`${API_BASE}/api/complaints/${compId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: supabaseStatus })
@@ -585,7 +582,7 @@ export default function App() {
     const prev = complaints;
     setComplaints(c => c.filter(x => x.id !== compId));
     try {
-      const res = await fetch(`/api/complaints/${compId}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/api/complaints/${compId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete complaint");
       addToast("Complaint ticket removed.", "success");
     } catch (err) {
@@ -603,7 +600,7 @@ export default function App() {
     setNewAnnTitle("");
     setNewAnnContent("");
     try {
-      const res = await fetch("/api/announcements", {
+      const res = await fetch(`${API_BASE}/api/announcements`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: titleSnapshot, message: contentSnapshot })
@@ -744,7 +741,7 @@ export default function App() {
     setNewAsgTitle("");
     setNewAsgDesc("");
     try {
-      const res = await fetch("/api/assignments", {
+      const res = await fetch(`${API_BASE}/api/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -781,7 +778,7 @@ export default function App() {
     const descSnap = newCompDesc;
     setNewCompDesc("");
     try {
-      const res = await fetch("/api/complaints", {
+      const res = await fetch(`${API_BASE}/api/complaints`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -851,7 +848,7 @@ export default function App() {
     setChatLoading(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
