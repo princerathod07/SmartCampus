@@ -199,7 +199,7 @@ export default function App() {
       setDbLoading(true);
       try {
         // --- Books ---
-        const API = "https://smartcampus-backend.onrender.com";
+        const API = "https://smartcampus-backend-eubv.onrender.com";
         const booksRes = await fetch(`${API}/api/books`);
         if (booksRes.ok) {
           const data = await booksRes.json();
@@ -216,7 +216,7 @@ export default function App() {
         }
 
         // --- Announcements ---
-        const ANN = "https://smartcampus-backend.onrender.com";
+        const ANN = "https://smartcampus-backend-eubv.onrender.com";
         const annRes = await fetch(`${ANN}/api/announcements`);
         if (annRes.ok) {
           const data = await annRes.json();
@@ -231,7 +231,7 @@ export default function App() {
         }
 
         // --- Assignments ---
-        const ASS = "https://smartcampus-backend.onrender.com";
+        const ASS = "https://smartcampus-backend-eubv.onrender.com";
         const asgRes = await fetch(`${ASS}/api/assignments`);
         if (asgRes.ok) {
           const data = await asgRes.json();
@@ -248,7 +248,7 @@ export default function App() {
         }
 
         // --- Complaints ---
-        const CMP = "https://smartcampus-backend.onrender.com";
+        const CMP = "https://smartcampus-backend-eubv.onrender.com";
         const cmpRes = await fetch(`${CMP}/api/complaints`);
         if (cmpRes.ok) {
           const data = await cmpRes.json();
@@ -265,7 +265,7 @@ export default function App() {
         }
 
         // --- Users ---
-        const usr = "https://smartcampus-backend.onrender.com";
+        const usr = "https://smartcampus-backend-eubv.onrender.com";
         const usersRes = await fetch(`${usr}/api/users`);
         if (usersRes.ok) {
           const uData = await usersRes.json();
