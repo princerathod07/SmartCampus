@@ -95,7 +95,7 @@ interface ChatMessage {
 }
 
 export default function App() {
-  const API_BASE = import.meta.env.VITE_API_URL || '';
+  const API_BASE = import.meta.env.VITE_API_URL || 'https://smartcampus-backend-eubv.onrender.com';
 
   // Session & Authentication
   const [session, setSession] = useState<UserProfile | null>(() => {
@@ -437,9 +437,10 @@ export default function App() {
 
     const allUsers = await response.json();
 
-    const foundUser = allUsers.find(
-      (u: any) => u.username.toLowerCase() === loginUser.toLowerCase()
-    );
+    const foundUser = allUsers.find((u: any) => {
+      const parts = u.email.split("|");
+      return parts[1]?.toLowerCase() === loginUser.toLowerCase();
+    });
     if (!foundUser) {
       setAuthError("Credentials invalid. Check your username or choose to Register.");
       return;
@@ -456,19 +457,30 @@ export default function App() {
 
     // Match registered database password
     if (loginUser !== "student" && loginUser !== "admin") {
-      const dbPassword = (foundUser as any).password;
+      const [, , dbPassword] = foundUser.email.split("|");
       if (dbPassword && loginPass !== dbPassword) {
         setAuthError(`Incorrect password for account '${loginUser}'.`);
         return;
       }
     }
 
-    setSession(foundUser);
-    sessionStorage.setItem("sca_session", JSON.stringify(foundUser));
-    setAuthError("");
-    setLoginPass("");
-    addToast(`Successfully logged in as ${foundUser.fullName}`, "success");
-  };
+    const [userEmail, username] = foundUser.email.split("|");
+
+    const userProfile = {
+      userId: foundUser.id,
+      username,
+      fullName: foundUser.name,
+      email: userEmail,
+      role: foundUser.role,
+      department: "",
+      semester: "",
+      studentId: ""
+    };
+
+    setSession(userProfile);
+    sessionStorage.setItem("sca_session", JSON.stringify(userProfile));
+    addToast(`Successfully logged in as ${userProfile.fullName}`, "success");
+      };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
