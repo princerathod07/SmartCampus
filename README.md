@@ -57,31 +57,49 @@ SUPABASE_URL=https://*****
 SUPABASE_SERVICE_ROLE_KEY=sb_sec****
 GEMINI_API_KEY=AQ.Ab8RN6JlM_vJ-wN35lU******
 ```
-### 🛠️ Installation & Setup
+## 🛠️ Installation & Setup
 git clone https://github.com/princerathod07/SmartCampus
+
 cd SmartCampus
 
 cd frontend
+
 npm install
+
 npm run dev
 
 cd backend
+
 npm install
+
 npm start
 
-###🌐 Deployment
-Frontend (Vercel)<br>
-  Connect GitHub repo to Vercel<br>
-  Add environment variables<br>
-  Deploy automatically on push<br>
-Backend (Render)<br>
-  Connect repository or backend folder<br>
-  Set build & start commands<br>
-  Add environment variables<br>
-Database (Supabase)<br>
-  Create project in Supabase<br>
-  Configure tables and relationships<br>
-  Enable authentication if required<br>
+## 🌐 Deployment
 
-👨‍💻 Author
+### Frontend (Vercel)
+
+  Connect GitHub repo to Vercel
+  
+  Add environment variables
+  
+  Deploy automatically on push
+  
+### Backend (Render)
+
+  Connect repository or backend folder
+  
+  Set build & start commands
+  
+  Add environment variables
+  
+### Database (Supabase)
+
+  Create project in Supabase
+  
+  Configure tables and relationships
+  
+  Enable authentication if required
+
+## 👨‍💻 Author
+
 Prince Rathod
