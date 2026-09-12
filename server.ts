@@ -21,10 +21,30 @@ function simulateCampusFAQ(q: string): string {
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(cors());
   app.use(express.json());
+
+  // =========================
+  // HEALTH CHECK ROUTE
+  // =========================
+  app.get("/api/health", async (req, res) => {
+    let supabaseStatus = "unknown";
+    try {
+      const { error } = await supabase.from("books").select("id").limit(1);
+      supabaseStatus = error ? `error: ${error.message}` : "connected";
+    } catch (e: any) {
+      supabaseStatus = `error: ${e.message}`;
+    }
+    res.json({
+      status: "ok",
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      database: supabaseStatus,
+      geminiConfigured: !!process.env.GEMINI_API_KEY
+    });
+  });
 
   // =========================
   // SUPABASE TEST ROUTE
@@ -269,6 +289,17 @@ async function startServer() {
         .select();
       if (error) return res.status(500).json(error);
       res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { error } = await supabase.from("users").delete().eq("id", id);
+      if (error) return res.status(500).json(error);
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
