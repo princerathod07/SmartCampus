@@ -42,7 +42,10 @@ async function startServer() {
       uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
       database: supabaseStatus,
-      geminiConfigured: !!process.env.GEMINI_API_KEY
+      geminiConfigured: !!process.env.GEMINI_API_KEY,
+      supabaseKeysFound: Object.keys(process.env).filter(k => k.includes("SUPABASE")),
+      hasServiceRoleKey: !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY),
+      serviceRoleKeyPrefix: (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || "").substring(0, 10)
     });
   });
 
