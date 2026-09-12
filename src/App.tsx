@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Sparkles, CheckCircle2, Trash2, Clock, Terminal, Activity, Copy, Check, 
   Search, BookOpen, ChevronRight, Heart, User, GraduationCap, AlertCircle, 
-  Send, LogOut, Bell, Calendar, UserCheck, ShieldAlert, RefreshCw, LayoutDashboard, BookmarkCheck
+  Send, LogOut, Bell, Calendar, UserCheck, ShieldAlert, RefreshCw, LayoutDashboard, BookmarkCheck,
+  Users, ShieldCheck, Plus, Filter, Server
 } from "lucide-react";
 
 // Robust TypeScript Interfaces
@@ -95,7 +96,9 @@ interface ChatMessage {
 }
 
 export default function App() {
-  const API_BASE = import.meta.env.VITE_API_URL || 'https://smartcampus-backend-eubv.onrender.com';
+  // Auto-detect local development server vs production Render backend
+  const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const API_BASE = import.meta.env.VITE_API_URL || (isLocalhost ? "" : "https://smartcampus-backend-eubv.onrender.com");
 
   // Session & Authentication
   const [session, setSession] = useState<UserProfile | null>(() => {
@@ -306,6 +309,17 @@ export default function App() {
             return merged;
           });
         }
+
+        // --- System Health ---
+        try {
+          const healthRes = await fetch(`${API_BASE}/api/health`);
+          if (healthRes.ok) {
+            const hData = await healthRes.json();
+            setSystemHealth(hData);
+          }
+        } catch {
+          // non-blocking
+        }
       } catch (err) {
         console.error("Failed to load data from Supabase:", err);
       } finally {
@@ -362,6 +376,24 @@ export default function App() {
 
   const [newCompCat, setNewCompCat] = useState("IT Support (WiFi/Portal)");
   const [newCompDesc, setNewCompDesc] = useState("");
+  const [complaintFilter, setComplaintFilter] = useState<"ALL" | "PENDING" | "REVIEWING" | "RESOLVED">("ALL");
+
+  // Admin Book Form
+  const [newBookTitle, setNewBookTitle] = useState("");
+  const [newBookAuthor, setNewBookAuthor] = useState("");
+  const [newBookCategory, setNewBookCategory] = useState("Computer Science");
+  const [newBookIsbn, setNewBookIsbn] = useState("");
+  const [showAddBook, setShowAddBook] = useState(false);
+
+  // Admin User Creation Form
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserUsername, setNewUserUsername] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"STUDENT" | "ADMIN">("STUDENT");
+
+  // System Diagnostics
+  const [systemHealth, setSystemHealth] = useState<{ status: string; uptime: number; database: string; geminiConfigured: boolean } | null>(null);
 
   const [newRemTitle, setNewRemTitle] = useState("");
   const [newRemCat, setNewRemCat] = useState("Exam");
@@ -636,6 +668,98 @@ export default function App() {
     }
   };
 
+  // Delete Announcement → Supabase
+  const removeAnnouncement = async (annId: string) => {
+    const prev = announcements;
+    setAnnouncements(p => p.filter(a => a.id !== annId));
+    try {
+      const res = await fetch(`${API_BASE}/api/announcements/${annId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete announcement");
+      addToast("Announcement removed successfully.", "success");
+    } catch (err) {
+      console.error(err);
+      setAnnouncements(prev);
+      addToast("Failed to delete announcement.", "error");
+    }
+  };
+
+  // Admin: Add new book → Supabase & state
+  const addBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBookTitle.trim() || !newBookAuthor.trim()) {
+      addToast("Please provide book title and author.", "error");
+      return;
+    }
+    const titleSnap = newBookTitle.trim();
+    const authorSnap = newBookAuthor.trim();
+    const catSnap = newBookCategory || "Computer Science";
+    const isbnSnap = newBookIsbn.trim() || `ISBN-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: titleSnap, author: authorSnap })
+      });
+      if (!res.ok) throw new Error("Failed to add book to catalog");
+      const data = await res.json();
+      const saved = Array.isArray(data) ? data[0] : data;
+      const newBook: Book = {
+        id: saved.id,
+        title: saved.title || titleSnap,
+        author: saved.author || authorSnap,
+        isbn: isbnSnap,
+        category: catSnap,
+        copies: 1,
+        available: saved.available ? 1 : 0,
+        link: "#"
+      };
+      setBooks(prev => [newBook, ...prev]);
+      setNewBookTitle("");
+      setNewBookAuthor("");
+      setNewBookIsbn("");
+      setShowAddBook(false);
+      addToast(`Book "${titleSnap}" added to catalog.`, "success");
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to add book. Please try again.", "error");
+    }
+  };
+
+  // Admin: Delete book → Supabase & state
+  const removeBook = async (bookId: string) => {
+    const prev = books;
+    setBooks(p => p.filter(b => b.id !== bookId));
+    try {
+      const res = await fetch(`${API_BASE}/api/books/${bookId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete book");
+      addToast("Book removed from catalog.", "success");
+    } catch (err) {
+      console.error(err);
+      setBooks(prev);
+      addToast("Failed to remove book.", "error");
+    }
+  };
+
+  // Admin: Toggle book availability → Supabase & state
+  const toggleBookAvailability = async (bookId: string, currentAvailable: boolean) => {
+    const newAvailable = !currentAvailable;
+    setBooks(prev => prev.map(b => b.id === bookId ? { ...b, available: newAvailable ? 1 : 0 } : b));
+    try {
+      const res = await fetch(`${API_BASE}/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ available: newAvailable })
+      });
+      if (!res.ok) throw new Error("Failed to update book status");
+      addToast(`Book status set to ${newAvailable ? "Available" : "Checked Out"}.`, "info");
+    } catch (err) {
+      console.error(err);
+      setBooks(prev => prev.map(b => b.id === bookId ? { ...b, available: currentAvailable ? 1 : 0 } : b));
+      addToast("Failed to update book status.", "error");
+    }
+  };
+
   // Student Homework Submissions
   const submitAssignmentRich = (asgId: string) => {
     if (!session) return;
@@ -780,6 +904,94 @@ export default function App() {
     } catch (err) {
       console.error(err);
       addToast("Failed to publish assignment. Please try again.", "error");
+    }
+  };
+
+  // Delete Assignment → Supabase
+  const removeAssignment = async (asgId: string) => {
+    const prev = assignments;
+    setAssignments(p => p.filter(a => a.id !== asgId));
+    try {
+      const res = await fetch(`${API_BASE}/api/assignments/${asgId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete assignment");
+      addToast("Assignment removed successfully.", "success");
+    } catch (err) {
+      console.error(err);
+      setAssignments(prev);
+      addToast("Failed to remove assignment.", "error");
+    }
+  };
+
+  // Admin: Create new user (Student or Admin)
+  const adminCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserName.trim() || !newUserUsername.trim() || !newUserEmail.trim() || !newUserPassword.trim()) {
+      addToast("Please fill all user details.", "error");
+      return;
+    }
+    const nameSnap = newUserName.trim();
+    const userSnap = newUserUsername.trim().toLowerCase();
+    const emailSnap = newUserEmail.trim();
+    const passSnap = newUserPassword.trim();
+    const roleSnap = newUserRole;
+
+    if (users.some(u => u.username.toLowerCase() === userSnap)) {
+      addToast(`Username "${userSnap}" is already taken.`, "error");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: nameSnap,
+          email: `${emailSnap}|${userSnap}|${passSnap}`,
+          role: roleSnap
+        })
+      });
+      if (!res.ok) throw new Error("Failed to register user in database");
+      const data = await res.json();
+      const saved = Array.isArray(data) ? data[0] : data;
+      const createdUser: UserProfile & { password?: string } = {
+        userId: String(saved.id),
+        username: userSnap,
+        fullName: nameSnap,
+        email: emailSnap,
+        role: roleSnap,
+        department: roleSnap === "ADMIN" ? "IT Support" : "Computer Science",
+        semester: roleSnap === "ADMIN" ? "N/A" : "4",
+        studentId: roleSnap === "ADMIN" ? "ADM-999" : `STU-2026-${Math.floor(100 + Math.random() * 900)}`,
+        password: passSnap
+      };
+      setUsers(prev => [...prev, createdUser]);
+      setNewUserName("");
+      setNewUserUsername("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+      addToast(`User "${nameSnap}" added to directory as ${roleSnap}.`, "success");
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to create user. Please try again.", "error");
+    }
+  };
+
+  // Admin: Delete user
+  const adminDeleteUser = async (userId: string, userName: string) => {
+    if (session?.userId === userId) {
+      addToast("Cannot delete your currently active session account.", "error");
+      return;
+    }
+    const prev = users;
+    setUsers(p => p.filter(u => u.userId !== userId));
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${userId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete user");
+      addToast(`User "${userName}" removed from system.`, "info");
+    } catch (err) {
+      console.error(err);
+      setUsers(prev);
+      addToast("Failed to delete user.", "error");
     }
   };
 
@@ -1110,6 +1322,17 @@ export default function App() {
               <Terminal className="w-4 h-4" />
               <span>AI Campus BOT</span>
             </button>
+
+            {session.role === "ADMIN" && (
+              <>
+                <div className="px-3 pt-5 pb-2 text-[9px] uppercase tracking-widest font-bold text-indigo-400 font-mono">Administration</div>
+                <button onClick={() => setActiveTab("admin-center")} className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-lg transition-all ${activeTab === "admin-center" ? "bg-indigo-600/90 text-white font-bold shadow-lg shadow-indigo-600/10 border border-indigo-500/20" : "hover:bg-slate-900/60 hover:text-slate-100 text-slate-400"}`}>
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span>Admin Center</span>
+                  <span className="ml-auto bg-indigo-500/20 text-indigo-300 font-bold px-1.5 py-0.5 rounded text-[9px] border border-indigo-400/20">PORTAL</span>
+                </button>
+              </>
+            )}
           </nav>
 
           <div className="p-4 border-t border-slate-900 space-y-2">
@@ -1164,40 +1387,76 @@ export default function App() {
                 </div>
 
                 {/* Dashboard Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
-                    <div>
-                      <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Library Catalog</span>
-                      <span className="text-2xl font-black font-mono text-white">{books.length}</span>
-                      <span className="text-slate-400 text-[11px] block mt-1">Total Books Available</span>
+                {session.role === "ADMIN" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Campus Directory</span>
+                        <span className="text-2xl font-black font-mono text-white">{users.length}</span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Total Users</span>
+                      </div>
+                      <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">👥</div>
                     </div>
-                    <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">📚</div>
-                  </div>
 
-                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
-                    <div>
-                      <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Weekly Courses</span>
-                      <span className="text-2xl font-black font-mono text-white">{timetable.length}</span>
-                      <span className="text-slate-400 text-[11px] block mt-1">Class Schedules</span>
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Library Catalog</span>
+                        <span className="text-2xl font-black font-mono text-white">{books.length}</span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Books Tracked</span>
+                      </div>
+                      <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">📚</div>
                     </div>
-                    <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">🗓️</div>
-                  </div>
 
-                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
-                    <div>
-                      <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">
-                        {session.role === "STUDENT" ? "My Borrowed Books" : "Active Reminders"}
-                      </span>
-                      <span className="text-2xl font-black font-mono text-indigo-400">
-                        {session.role === "STUDENT" ? borrowedBookIds.length : reminders.length}
-                      </span>
-                      <span className="text-slate-400 text-[11px] block mt-1">
-                        {session.role === "STUDENT" ? "Personal Library Rentals" : "Total Active Alarms"}
-                      </span>
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Pending Complaints</span>
+                        <span className="text-2xl font-black font-mono text-rose-400">
+                          {complaints.filter(c => c.status === "PENDING").length}
+                        </span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Requiring Action</span>
+                      </div>
+                      <div className="p-3.5 bg-rose-950/40 text-rose-400 border border-rose-900/30 rounded-xl font-bold text-xl shadow-md">⚠️</div>
                     </div>
-                    <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">🔔</div>
+
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Assignments</span>
+                        <span className="text-2xl font-black font-mono text-indigo-400">{assignments.length}</span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Active Modules</span>
+                      </div>
+                      <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">📋</div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Library Catalog</span>
+                        <span className="text-2xl font-black font-mono text-white">{books.length}</span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Total Books Available</span>
+                      </div>
+                      <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">📚</div>
+                    </div>
+
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">Weekly Courses</span>
+                        <span className="text-2xl font-black font-mono text-white">{timetable.length}</span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Class Schedules</span>
+                      </div>
+                      <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">🗓️</div>
+                    </div>
+
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg flex items-center justify-between hover:border-indigo-500/30 transition-all glow-card">
+                      <div>
+                        <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block mb-1">My Borrowed Books</span>
+                        <span className="text-2xl font-black font-mono text-indigo-400">{borrowedBookIds.length}</span>
+                        <span className="text-slate-400 text-[11px] block mt-1">Personal Library Rentals</span>
+                      </div>
+                      <div className="p-3.5 bg-indigo-950/60 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold text-xl shadow-md">🔔</div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   
@@ -1431,16 +1690,24 @@ export default function App() {
                           <p className="text-xs text-slate-400 leading-relaxed mb-3.5 pr-4">{a.content}</p>
                           <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] text-slate-500 font-mono border-t border-slate-900 pt-3">
                             <span>Admin Post · {a.timestamp}</span>
-                            {session.role === "STUDENT" && (
-                              <button onClick={() => {
-                                const tomorrow = new Date();
-                                tomorrow.setDate(tomorrow.getDate() + 1);
-                                const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-                                setQuickReminder(`Alert: ${a.title}`, "Event", `${tomorrowStr}T09:00`);
-                              }} disabled={savedRem} className={`px-3 py-1 font-sans rounded-lg transition-all font-bold cursor-pointer ${savedRem ? "bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed" : "bg-indigo-950/40 hover:bg-indigo-900/40 text-indigo-400 border border-indigo-900/20"}`}>
-                                {savedRem ? "✓ Pin Reminder Active" : "🔔 Set Reminder Alert"}
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {session.role === "STUDENT" && (
+                                <button onClick={() => {
+                                  const tomorrow = new Date();
+                                  tomorrow.setDate(tomorrow.getDate() + 1);
+                                  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+                                  setQuickReminder(`Alert: ${a.title}`, "Event", `${tomorrowStr}T09:00`);
+                                }} disabled={savedRem} className={`px-3 py-1 font-sans rounded-lg transition-all font-bold cursor-pointer ${savedRem ? "bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed" : "bg-indigo-950/40 hover:bg-indigo-900/40 text-indigo-400 border border-indigo-900/20"}`}>
+                                  {savedRem ? "✓ Pin Reminder Active" : "🔔 Set Reminder Alert"}
+                                </button>
+                              )}
+                              {session.role === "ADMIN" && (
+                                <button onClick={() => removeAnnouncement(a.id)} className="px-3 py-1 font-sans rounded-lg text-rose-400 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-900/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5">
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete Alert</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1493,6 +1760,51 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Admin Add Book Bar */}
+                {session.role === "ADMIN" && (
+                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm display-font">📚 Library Administration</span>
+                        <span className="text-[9px] uppercase font-mono tracking-wider text-indigo-400 bg-indigo-500/10 border border-indigo-400/20 px-2 py-0.5 rounded font-bold">Admin Mode</span>
+                      </div>
+                      <button onClick={() => setShowAddBook(!showAddBook)} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{showAddBook ? "Close Form" : "Add New Book"}</span>
+                      </button>
+                    </div>
+
+                    {showAddBook && (
+                      <form onSubmit={addBook} className="border-t border-slate-800 pt-4 mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Book Title</label>
+                          <input type="text" value={newBookTitle} onChange={(e) => setNewBookTitle(e.target.value)} required placeholder="e.g. Operating Systems Principles" className="w-full px-3.5 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Author</label>
+                          <input type="text" value={newBookAuthor} onChange={(e) => setNewBookAuthor(e.target.value)} required placeholder="e.g. Silberschatz" className="w-full px-3.5 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Category</label>
+                          <select value={newBookCategory} onChange={(e) => setNewBookCategory(e.target.value)} className="w-full px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none text-slate-300">
+                            <option>Computer Science</option>
+                            <option>Programming</option>
+                            <option>Software Engineering</option>
+                            <option>Database Systems</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Custom ISBN (Optional)</label>
+                          <div className="flex gap-2">
+                            <input type="text" value={newBookIsbn} onChange={(e) => setNewBookIsbn(e.target.value)} placeholder="Auto-generated if empty" className="w-full px-3.5 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200" />
+                            <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold cursor-pointer shrink-0 shadow">Save</button>
+                          </div>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {books.filter(b => {
                     const matchQ = b.title.toLowerCase().includes(bookSearch.toLowerCase()) || b.author.toLowerCase().includes(bookSearch.toLowerCase());
@@ -1500,14 +1812,14 @@ export default function App() {
                     return matchQ && matchC;
                   }).map(b => {
                     const isBorrowedByMe = borrowedBookIds.includes(b.id);
-                    const isAvailable = !isBorrowedByMe; // User specific availability calculation
+                    const isAvailable = session.role === "ADMIN" ? (b.available === 1) : (!isBorrowedByMe);
                     return (
                       <div key={b.id} className="bg-slate-900/40 border border-slate-800 p-5 rounded-xl flex flex-col justify-between shadow-lg hover:border-indigo-500/30 transition-all glow-card">
                         <div>
                           <div className="flex items-center justify-between mb-4">
                             <span className="text-[9px] bg-indigo-500/10 border border-indigo-400/20 text-indigo-400 px-2.5 py-0.5 rounded font-bold font-mono uppercase">{b.category}</span>
                             <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-bold font-mono border ${isAvailable ? "bg-emerald-950/20 text-emerald-400 border-emerald-900/20" : "bg-rose-950/20 text-rose-400 border-rose-900/20"}`}>
-                              {isAvailable ? "1/1 Available" : "Borrowed by You"}
+                              {session.role === "ADMIN" ? (b.available === 1 ? "Available (In Stock)" : "Checked Out") : (isAvailable ? "1/1 Available" : "Borrowed by You")}
                             </span>
                           </div>
                           
@@ -1516,12 +1828,22 @@ export default function App() {
                           <span className="text-slate-600 text-[10px] block font-mono">ISBN: {b.isbn}</span>
                         </div>
 
-                        <div className="border-t border-slate-900 pt-4 mt-5 flex items-center justify-between">
+                        <div className="border-t border-slate-900 pt-4 mt-5 flex items-center justify-between gap-2">
                           <a href={b.link} className="text-indigo-400 text-xs font-bold hover:text-indigo-300 hover:underline">Reference Guide</a>
                           {session.role === "STUDENT" && (
                             <button onClick={() => toggleBorrowBook(b.id)} className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${isBorrowedByMe ? "bg-amber-950/40 hover:bg-amber-900/40 text-amber-400 border border-amber-900/20" : "bg-indigo-600 hover:bg-indigo-500 text-white"}`}>
                               {isBorrowedByMe ? "Return Book" : "Rent / Borrow"}
                             </button>
+                          )}
+                          {session.role === "ADMIN" && (
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={() => toggleBookAvailability(b.id, b.available === 1)} className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition-colors cursor-pointer border ${b.available === 1 ? "bg-amber-950/30 text-amber-400 border-amber-900/30 hover:bg-amber-900/40" : "bg-emerald-950/30 text-emerald-400 border-emerald-900/30 hover:bg-emerald-900/40"}`}>
+                                {b.available === 1 ? "Mark Out" : "Mark In"}
+                              </button>
+                              <button onClick={() => removeBook(b.id)} title="Delete book" className="p-1.5 bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 border border-rose-900/20 rounded-lg text-xs font-bold transition-all cursor-pointer">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1602,9 +1924,17 @@ export default function App() {
                             <p className="text-xs text-slate-400 max-w-xl leading-relaxed">{a.description}</p>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            <span className="text-xs font-bold text-slate-500 block mb-1">Max Marks: {a.marks}</span>
-                            <span className="text-xs font-mono font-bold text-indigo-400 block bg-indigo-950/60 border border-indigo-900/40 px-2.5 py-1 rounded-lg">Due: {a.due}</span>
+                          <div className="text-right shrink-0 flex flex-col items-end gap-2">
+                            <div>
+                              <span className="text-xs font-bold text-slate-500 block mb-1">Max Marks: {a.marks}</span>
+                              <span className="text-xs font-mono font-bold text-indigo-400 block bg-indigo-950/60 border border-indigo-900/40 px-2.5 py-1 rounded-lg">Due: {a.due}</span>
+                            </div>
+                            {session.role === "ADMIN" && (
+                              <button onClick={() => removeAssignment(a.id)} className="px-2.5 py-1 text-[11px] font-bold text-rose-400 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-900/20 rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete Task</span>
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -1840,6 +2170,24 @@ export default function App() {
                   </form>
                 )}
 
+                {/* Complaint Filters & Status */}
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-1 bg-slate-950/60 border border-slate-800 p-1 rounded-xl text-xs">
+                    {(["ALL", "PENDING", "REVIEWING", "RESOLVED"] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setComplaintFilter(f)}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${complaintFilter === f ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"}`}
+                      >
+                        {f === "ALL" ? "All Tickets" : f.charAt(0) + f.slice(1).toLowerCase()}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-slate-500 font-mono">
+                    Showing {complaints.filter(c => (session.role === "ADMIN" || c.studentId === session.userId) && (complaintFilter === "ALL" || c.status === complaintFilter)).length} tickets
+                  </span>
+                </div>
+
                 <div className="bg-slate-950/40 border border-slate-900 rounded-xl shadow-lg overflow-hidden whitespace-nowrap overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
@@ -1851,14 +2199,14 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-900">
-                      {complaints.filter(c => session.role === "ADMIN" || c.studentId === session.userId).length === 0 ? (
+                      {complaints.filter(c => (session.role === "ADMIN" || c.studentId === session.userId) && (complaintFilter === "ALL" || c.status === complaintFilter)).length === 0 ? (
                         <tr>
                           <td colSpan={4} className="p-8 text-center text-slate-500">
-                            No complaints filed in this ledger.
+                            No complaints found in this category.
                           </td>
                         </tr>
                       ) : (
-                        complaints.filter(c => session.role === "ADMIN" || c.studentId === session.userId).map(c => {
+                        complaints.filter(c => (session.role === "ADMIN" || c.studentId === session.userId) && (complaintFilter === "ALL" || c.status === complaintFilter)).map(c => {
                           const isPending = c.status === "PENDING";
                           const isResolved = c.status === "RESOLVED";
                           return (
@@ -1882,10 +2230,18 @@ export default function App() {
                               </td>
                               <td className="p-4 text-right">
                                 {session.role === "ADMIN" ? (
-                                  <div className="inline-flex gap-2">
-                                    <button onClick={() => updateComplaintStatus(c.id, "RESOLVED", "Resolved by IT Support.")} className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline cursor-pointer">Mark Resolved</button>
+                                  <div className="inline-flex items-center gap-2">
+                                    {c.status !== "RESOLVED" && (
+                                      <button onClick={() => updateComplaintStatus(c.id, "RESOLVED", "Resolved by IT Support.")} className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline cursor-pointer">Mark Resolved</button>
+                                    )}
+                                    {c.status === "PENDING" && (
+                                      <>
+                                        <span className="text-slate-700">|</span>
+                                        <button onClick={() => updateComplaintStatus(c.id, "REVIEWING", "Audit review initiated.")} className="text-xs text-amber-400 hover:text-amber-300 hover:underline font-semibold cursor-pointer">Under Audit</button>
+                                      </>
+                                    )}
                                     <span className="text-slate-700">|</span>
-                                    <button onClick={() => updateComplaintStatus(c.id, "REVIEWING", "Audit review initiated.")} className="text-xs text-amber-400 hover:text-amber-300 hover:underline font-semibold cursor-pointer">Under Audit</button>
+                                    <button onClick={() => removeComplaint(c.id)} title="Delete ticket" className="text-xs text-rose-400 hover:text-rose-350 hover:underline font-semibold cursor-pointer">Delete</button>
                                   </div>
                                 ) : (
                                   <button onClick={() => removeComplaint(c.id)} className="text-xs text-rose-400 hover:text-rose-350 hover:underline font-semibold cursor-pointer">Cancel Ticket</button>
@@ -1988,6 +2344,171 @@ export default function App() {
                       <span className="text-slate-200 font-semibold">{session.semester}th Semester</span>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* 11. ADMIN CENTER & USER DIRECTORY SCREEN */}
+            {activeTab === "admin-center" && session.role === "ADMIN" && (
+              <div className="space-y-6">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-indigo-950/80 via-slate-900/90 to-slate-950 border border-indigo-500/10 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[9px] uppercase font-bold tracking-widest bg-indigo-500/10 border border-indigo-400/20 text-indigo-300 px-2.5 rounded-full py-0.5">Administrative Master Control</span>
+                      <span className="text-[9px] font-mono text-emerald-400 font-bold">● System Operational</span>
+                    </div>
+                    <h2 className="text-2xl font-extrabold tracking-tight display-font">Admin Center & User Directory</h2>
+                    <p className="text-slate-400 text-xs mt-1">Manage registered accounts, inspect live database links, and configure campus assets.</p>
+                  </div>
+                </div>
+
+                {/* Diagnostics Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 shadow flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Database Status</span>
+                      <span className="text-sm font-bold font-mono text-emerald-400">
+                        {systemHealth?.database === "connected" ? "Supabase Active" : "Supabase Linked"}
+                      </span>
+                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">ursquqpgofituzvhwmhk</span>
+                    </div>
+                    <div className="p-2.5 bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded-xl font-bold">⚡</div>
+                  </div>
+
+                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 shadow flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Render API</span>
+                      <span className="text-sm font-bold font-mono text-indigo-400">Production Live</span>
+                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">smartcampus-backend</span>
+                    </div>
+                    <div className="p-2.5 bg-indigo-950/40 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold">🌐</div>
+                  </div>
+
+                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 shadow flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Registered Users</span>
+                      <span className="text-sm font-bold font-mono text-white">{users.length} Accounts</span>
+                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">
+                        {users.filter(u => u.role === "STUDENT").length} Students · {users.filter(u => u.role === "ADMIN").length} Admins
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-indigo-950/40 text-indigo-400 border border-indigo-900/30 rounded-xl font-bold">👥</div>
+                  </div>
+
+                  <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 shadow flex items-center justify-between">
+                    <div>
+                      <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Pending Grievances</span>
+                      <span className="text-sm font-bold font-mono text-rose-400">
+                        {complaints.filter(c => c.status === "PENDING").length} Tickets
+                      </span>
+                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">Complaints Desk</span>
+                    </div>
+                    <div className="p-2.5 bg-rose-950/40 text-rose-400 border border-rose-900/30 rounded-xl font-bold">⚠️</div>
+                  </div>
+                </div>
+
+                {/* Create New User Form */}
+                <form onSubmit={adminCreateUser} className="bg-slate-900/40 border border-slate-800 rounded-xl p-6 shadow-lg space-y-4">
+                  <h4 className="font-bold text-white text-sm pb-2 flex items-center justify-between border-b border-slate-800 display-font">
+                    <div className="flex items-center gap-2">
+                      <span>👤 Register New Campus User</span>
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-indigo-400 font-mono bg-indigo-500/10 border border-indigo-400/20 px-2 py-0.5 rounded">User Provisioning</span>
+                    </div>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
+                      <input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} required placeholder="e.g. Rahul Sharma" className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Username Handle</label>
+                      <input type="text" value={newUserUsername} onChange={(e) => setNewUserUsername(e.target.value)} required placeholder="e.g. rahul24" className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
+                      <input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} required placeholder="e.g. rahul@campus.edu" className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Temporary Password</label>
+                      <input type="text" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} required placeholder="e.g. pass123" className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 font-mono" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Account Role</label>
+                      <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value as any)} className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none text-slate-200">
+                        <option value="STUDENT">STUDENT</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button type="submit" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-lg shadow-indigo-600/10 flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Provision User Account</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Users Directory Table */}
+                <div className="bg-slate-900/40 border border-slate-800 rounded-xl shadow-lg overflow-hidden">
+                  <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-indigo-400" />
+                      <span className="font-bold text-white text-sm display-font">Active Campus Users Directory</span>
+                    </div>
+                    <span className="text-xs text-slate-500 font-mono">{users.length} Total Users</span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-950/60 border-b border-slate-800 uppercase font-bold tracking-wider text-slate-400">
+                          <th className="p-4">User</th>
+                          <th className="p-4">Login Handle</th>
+                          <th className="p-4">Email</th>
+                          <th className="p-4">Role</th>
+                          <th className="p-4">Dept / ID</th>
+                          <th className="p-4 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-900">
+                        {users.map(u => {
+                          const isSelf = u.userId === session.userId;
+                          return (
+                            <tr key={u.userId} className="hover:bg-slate-900/20 transition-all">
+                              <td className="p-4">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-lg bg-indigo-950/60 border border-indigo-900/40 text-indigo-300 font-bold flex items-center justify-center text-xs">
+                                    {u.fullName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="font-bold text-white">{u.fullName}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 font-mono text-slate-300">@{u.username}</td>
+                              <td className="p-4 text-slate-400">{u.email}</td>
+                              <td className="p-4">
+                                <span className={`px-2 py-0.5 rounded font-mono text-[9px] font-bold border ${u.role === "ADMIN" ? "bg-indigo-950/60 text-indigo-300 border-indigo-800/40" : "bg-emerald-950/40 text-emerald-400 border-emerald-900/30"}`}>
+                                  {u.role}
+                                </span>
+                              </td>
+                              <td className="p-4 text-slate-400 font-mono text-[11px]">{u.department} · {u.studentId}</td>
+                              <td className="p-4 text-right">
+                                {isSelf ? (
+                                  <span className="text-[10px] text-slate-600 italic">Active Session</span>
+                                ) : (
+                                  <button onClick={() => adminDeleteUser(u.userId, u.fullName)} className="text-xs text-rose-400 hover:text-rose-350 hover:underline font-semibold cursor-pointer">
+                                    Delete
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}

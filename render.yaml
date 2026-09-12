@@ -7,4 +7,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Don't forget to add your SUPABASE_URL, SUPABASE_ANON_KEY and GEMINI_API_KEY in the Render dashboard!
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # In the Render dashboard, set:
+      # SUPABASE_URL = https://ursquqpgofituzvhwmhk.supabase.co
+      # SUPABASE_SERVICE_ROLE_KEY = your secret service role key (bypasses RLS)
+      # GEMINI_API_KEY = your Google AI Studio API key (starts with AIza)
