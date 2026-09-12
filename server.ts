@@ -207,6 +207,27 @@ async function startServer() {
     }
   });
 
+  app.patch("/api/assignments/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, description, due_date } = req.body;
+      const updateData: Record<string, any> = {};
+      if (title !== undefined) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (due_date !== undefined) updateData.due_date = due_date;
+
+      const { data, error } = await supabase
+        .from("assignments")
+        .update(updateData)
+        .eq("id", id)
+        .select();
+      if (error) return res.status(500).json(error);
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // =========================
   // COMPLAINTS API
   // =========================
@@ -303,6 +324,27 @@ async function startServer() {
       const { error } = await supabase.from("users").delete().eq("id", id);
       if (error) return res.status(500).json(error);
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, email, role } = req.body;
+      const updateData: Record<string, any> = {};
+      if (name !== undefined) updateData.name = name;
+      if (email !== undefined) updateData.email = email;
+      if (role !== undefined) updateData.role = role;
+
+      const { data, error } = await supabase
+        .from("users")
+        .update(updateData)
+        .eq("id", id)
+        .select();
+      if (error) return res.status(500).json(error);
+      res.json(data);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
