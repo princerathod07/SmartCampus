@@ -3,7 +3,7 @@ import {
   Sparkles, CheckCircle2, Trash2, Clock, Terminal, Activity, Copy, Check, 
   Search, BookOpen, ChevronRight, Heart, User, GraduationCap, AlertCircle, 
   Send, LogOut, Bell, Calendar, UserCheck, ShieldAlert, RefreshCw, LayoutDashboard, BookmarkCheck,
-  Users, ShieldCheck, Plus, Filter, Server
+  Users, Plus, Filter, Server, Edit3, Phone, Mail, BadgeCheck
 } from "lucide-react";
 
 // Robust TypeScript Interfaces
@@ -16,6 +16,8 @@ interface UserProfile {
   department: string;
   semester: string;
   studentId: string;
+  phone?: string;
+  joinDate?: string;
 }
 
 interface ClassSlot {
@@ -116,14 +118,24 @@ export default function App() {
   const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regDept, setRegDept] = useState("Computer Science");
-  const [regSem, setRegSem] = useState("4");
+  const [regSem, setRegSem] = useState("1");
+  const [regStudentId, setRegStudentId] = useState("");
+  const [regPhone, setRegPhone] = useState("");
   const [regPass, setRegPass] = useState("");
+
+  // Edit Profile Modal States
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [profFullName, setProfFullName] = useState("");
+  const [profEmail, setProfEmail] = useState("");
+  const [profDept, setProfDept] = useState("");
+  const [profSem, setProfSem] = useState("");
+  const [profPhone, setProfPhone] = useState("");
 
   // Global State – data-backed by Supabase via backend API with offline persistence
   const [users, setUsers] = useState<UserProfile[]>(() => {
-    const defaultUsers = [
-      { userId: "USR-001", username: "admin", fullName: "Campus Admin", email: "admin@campus.edu|admin|admin123", role: "ADMIN", department: "IT Support", semester: "N/A", studentId: "ADM-999" },
-      { userId: "USR-002", username: "student", fullName: "student", email: "renish@campus.edu|student|student123", role: "STUDENT", department: "Computer Science", semester: "4", studentId: "STU-2024-001" }
+    const defaultUsers: UserProfile[] = [
+      { userId: "USR-001", username: "admin", fullName: "Campus Administrator", email: "admin@campus.edu", role: "ADMIN", department: "IT Support", semester: "N/A", studentId: "ADM-999", phone: "+91 98765 00001", joinDate: "Jan 2024" },
+      { userId: "USR-002", username: "student", fullName: "Rahul Sharma", email: "student@campus.edu", role: "STUDENT", department: "Computer Science", semester: "4", studentId: "STU-2024-001", phone: "+91 98765 43210", joinDate: "Aug 2024" }
     ];
     try {
       const localUsers = JSON.parse(localStorage.getItem("sc_local_users") || "[]");
@@ -247,6 +259,22 @@ export default function App() {
   useEffect(() => {
     if (users.length > 0) localStorage.setItem("sc_local_users", JSON.stringify(users));
   }, [users]);
+
+  // Synchronize book availability and data across multiple browser tabs in real-time
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "sc_local_books" && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setBooks(parsed);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   // ============================================================
   // FETCH ALL DATA FROM SUPABASE ON MOUNT
@@ -388,11 +416,20 @@ export default function App() {
             let username = u.email ? u.email.split("@")[0] : u.name.toLowerCase().replace(/\s+/g, "");
             let password = u.role === "ADMIN" ? "admin123" : "student123";
 
+            let department = "";
+            let semester = "";
+            let studentId = "";
+            let phone = "";
+
             if (u.email && u.email.includes("|")) {
               const parts = u.email.split("|");
               email = parts[0];
               username = parts[1] || username;
               password = parts[2] || password;
+              department = parts[3] || "";
+              semester = parts[4] || "";
+              studentId = parts[5] || "";
+              phone = parts[6] || "";
             }
 
             const localMatch = localUsers.find((lu: any) => lu.userId === String(u.id) || lu.username === username.toLowerCase());
@@ -403,9 +440,10 @@ export default function App() {
               fullName: localMatch?.fullName || u.name,
               email: localMatch?.email || email,
               role: (localMatch?.role || u.role || "STUDENT") as "STUDENT" | "ADMIN",
-              department: localMatch?.department || (u.role === "ADMIN" ? "IT Support" : "Computer Science"),
-              semester: localMatch?.semester || (u.role === "ADMIN" ? "N/A" : "8"),
-              studentId: localMatch?.studentId || (u.role === "ADMIN" ? "ADM-999" : `STU-2024-${String(u.id).substring(0, 3)}`),
+              department: localMatch?.department || department || (u.role === "ADMIN" ? "IT Support" : "Computer Science"),
+              semester: localMatch?.semester || semester || (u.role === "ADMIN" ? "N/A" : "4"),
+              studentId: localMatch?.studentId || studentId || (u.role === "ADMIN" ? "ADM-999" : `STU-2024-${String(u.id).substring(0, 3)}`),
+              phone: localMatch?.phone || phone || "",
               password: password
             };
           });
@@ -618,76 +656,104 @@ export default function App() {
       }
     }
 
-    const [userEmail, username] = foundUser.email.split("|");
+    const parts = foundUser.email.split("|");
+    const userEmail = parts[0] || foundUser.email;
+    const username = parts[1] || loginUser;
+    const deptFromEmail = parts[3];
+    const semFromEmail = parts[4];
+    const stuIdFromEmail = parts[5];
+    const phoneFromEmail = parts[6];
 
-    const userProfile = {
-      userId: foundUser.id,
-      username,
-      fullName: foundUser.name,
-      email: userEmail,
-      role: foundUser.role,
-      department: "",
-      semester: "",
-      studentId: ""
+    let localUsers: UserProfile[] = [];
+    try {
+      localUsers = JSON.parse(localStorage.getItem("sc_local_users") || "[]");
+    } catch {}
+    const localMatch = localUsers.find((lu: any) => lu.userId === String(foundUser.id) || lu.username?.toLowerCase() === (username || loginUser).toLowerCase());
+
+    const isStudent = (foundUser.role || localMatch?.role) === "STUDENT";
+    const userProfile: UserProfile = {
+      userId: String(foundUser.id),
+      username: (username || loginUser).toLowerCase(),
+      fullName: localMatch?.fullName || (loginUser === "student" ? "Rahul Sharma" : foundUser.name),
+      email: localMatch?.email || userEmail,
+      role: (localMatch?.role || foundUser.role || "STUDENT") as "STUDENT" | "ADMIN",
+      department: localMatch?.department || deptFromEmail || (isStudent ? "Computer Science" : "IT Support"),
+      semester: localMatch?.semester || semFromEmail || (isStudent ? "4" : "N/A"),
+      studentId: localMatch?.studentId || stuIdFromEmail || (isStudent ? (loginUser === "student" ? "STU-2024-001" : `STU-2026-${String(foundUser.id).slice(-3).padStart(3, "0")}`) : "ADM-999"),
+      phone: localMatch?.phone || phoneFromEmail || (loginUser === "student" ? "+91 98765 43210" : ""),
+      joinDate: localMatch?.joinDate || "Aug 2024"
     };
 
     setSession(userProfile);
     sessionStorage.setItem("sca_session", JSON.stringify(userProfile));
     addToast(`Successfully logged in as ${userProfile.fullName}`, "success");
-      };
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regFullName || !regUsername || !regEmail || !regPass) {
+    if (!regFullName.trim() || !regUsername.trim() || !regEmail.trim() || !regPass.trim()) {
       setAuthError("All registration criteria are mandatory.");
       return;
     }
-    if (users.some(u => u.username.toLowerCase() === regUsername.toLowerCase())) {
+    if (users.some(u => u.username.toLowerCase() === regUsername.trim().toLowerCase())) {
       setAuthError("Username is already taken by another account.");
       return;
     }
+
+    const assignedStudentId = regStudentId.trim() || `STU-2026-${Math.floor(100 + Math.random() * 900)}`;
 
     try {
       const res = await fetch(`${API_BASE}/api/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: regFullName,
-          email: `${regEmail}|${regUsername}|${regPass}`,
+          name: regFullName.trim(),
+          email: `${regEmail.trim()}|${regUsername.trim().toLowerCase()}|${regPass.trim()}|${regDept}|${regSem}|${assignedStudentId}|${regPhone.trim()}`,
           role: "STUDENT"
         })
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to register user in database.");
+      let savedId = `USR-${Date.now().toString().slice(-4)}`;
+      if (res.ok) {
+        const data = await res.json();
+        const savedUser = Array.isArray(data) ? data[0] : data;
+        if (savedUser?.id) savedId = String(savedUser.id);
       }
 
-      const data = await res.json();
-      const savedUser = Array.isArray(data) ? data[0] : data;
-      if (!savedUser) {
-        throw new Error("Invalid response from database.");
-      }
-
-      const newUser: UserProfile & { password?: string } = {
-        userId: String(savedUser.id),
-        username: regUsername.toLowerCase(),
-        fullName: regFullName,
-        email: regEmail,
+      const newUser: UserProfile = {
+        userId: savedId,
+        username: regUsername.trim().toLowerCase(),
+        fullName: regFullName.trim(),
+        email: regEmail.trim(),
         role: "STUDENT",
         department: regDept,
         semester: regSem,
-        studentId: `STU-2026-${Math.floor(100 + Math.random() * 900)}`,
-        password: regPass
+        studentId: assignedStudentId,
+        phone: regPhone.trim(),
+        joinDate: new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })
       };
 
-      setUsers(prev => [...prev, newUser]);
+      setUsers(prev => {
+        const nextUsers = [...prev, newUser];
+        try {
+          localStorage.setItem("sc_local_users", JSON.stringify(nextUsers));
+        } catch {}
+        return nextUsers;
+      });
+
       setRegFullName("");
       setRegUsername("");
       setRegEmail("");
       setRegPass("");
+      setRegStudentId("");
+      setRegPhone("");
       setAuthError("");
-      setAuthTab("login");
-      addToast("Registered successfully! You can now sign in.", "success");
+
+      // Automatically sign in the registered student and take them to their profile!
+      setSession(newUser);
+      sessionStorage.setItem("sca_session", JSON.stringify(newUser));
+      setActiveTab("profile");
+      addToast(`Account created! Welcome, ${newUser.fullName}.`, "success");
     } catch (err: any) {
       console.error("Registration error:", err);
       setAuthError(err.message || "Registration failed. Please try again.");
@@ -702,6 +768,64 @@ export default function App() {
     addToast("Logged out of SmartCampus Portal.", "info");
   };
 
+  // Student Profile Modification Handlers
+  const openEditProfile = () => {
+    if (!session) return;
+    setProfFullName(session.fullName);
+    setProfEmail(session.email);
+    setProfDept(session.department || "Computer Science");
+    setProfSem(session.semester || "1");
+    setProfPhone(session.phone || "");
+    setShowEditProfile(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session) return;
+    const updatedUser: UserProfile = {
+      ...session,
+      fullName: profFullName.trim(),
+      email: profEmail.trim(),
+      department: profDept,
+      semester: profSem,
+      phone: profPhone.trim()
+    };
+    setSession(updatedUser);
+    sessionStorage.setItem("sca_session", JSON.stringify(updatedUser));
+    setUsers(prev => {
+      const updatedList = prev.map(u => u.userId === session.userId ? updatedUser : u);
+      try {
+        localStorage.setItem("sc_local_users", JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
+    setShowEditProfile(false);
+    addToast("Profile details updated successfully!", "success");
+
+    try {
+      await fetch(`${API_BASE}/api/users/${session.userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updatedUser.fullName,
+          email: `${updatedUser.email}|${updatedUser.username}|${(session as any).password || ""}|${updatedUser.department}|${updatedUser.semester}|${updatedUser.studentId}|${updatedUser.phone}`
+        })
+      });
+    } catch {}
+  };
+
+  const copyStudentCredentials = () => {
+    if (!session) return;
+    try {
+      navigator.clipboard?.writeText(
+        `SmartCampus ID: ${session.studentId}\nName: ${session.fullName}\nDepartment: ${session.department}\nSemester: Semester ${session.semester}\nEmail: ${session.email}\nRole: ${session.role}`
+      );
+      addToast("Academic credentials copied to clipboard!", "success");
+    } catch {
+      addToast("Failed to copy to clipboard.", "error");
+    }
+  };
+
   // Student Borrow/Return operations (User-Specific Library)
   const toggleBorrowBook = (bookId: string) => {
     if (!session) return;
@@ -712,6 +836,10 @@ export default function App() {
       setBorrowedBookIds(prev => prev.filter(id => id !== bookId));
       addToast(book ? `Returned "${book.title}"` : "Returned book", "success");
     } else {
+      if (book && book.available !== 1) {
+        addToast(`"${book.title}" is currently unavailable.`, "error");
+        return;
+      }
       setBorrowedBookIds(prev => [...prev, bookId]);
       addToast(book ? `Successfully checked out "${book.title}"` : "Checked out book", "success");
     }
@@ -883,8 +1011,14 @@ export default function App() {
   // Admin: Toggle book availability → Supabase & state
   const toggleBookAvailability = async (bookId: string, currentAvailable: boolean) => {
     const newAvailable = !currentAvailable;
-    setBooks(prev => prev.map(b => b.id === bookId ? { ...b, available: newAvailable ? 1 : 0 } : b));
-    addToast(`Book status set to ${newAvailable ? "Available" : "Checked Out"}.`, "info");
+    setBooks(prev => {
+      const updated = prev.map(b => b.id === bookId ? { ...b, available: newAvailable ? 1 : 0 } : b);
+      try {
+        localStorage.setItem("sc_local_books", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    addToast(`Book status set to ${newAvailable ? "Available" : "Unavailable"}.`, "info");
     try {
       const res = await fetch(`${API_BASE}/api/books/${bookId}`, {
         method: "PATCH",
@@ -1386,7 +1520,7 @@ export default function App() {
               </div>
               <div className="flex items-center gap-3 bg-white/[0.03] hover:bg-white/[0.05] transition-colors p-3 rounded-xl border border-white/[0.06] text-xs">
                 <span className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs">⚡</span>
-                <span className="text-slate-300 font-medium">Multi-Tier Administrative Governance</span>
+                <span className="text-slate-300 font-medium">Real-Time Academic Administration</span>
               </div>
             </div>
           </div>
@@ -1498,27 +1632,61 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Student Roll / ID</label>
+                    <input
+                      type="text"
+                      value={regStudentId}
+                      onChange={(e) => setRegStudentId(e.target.value)}
+                      placeholder="Auto if empty (e.g. STU-2026-101)"
+                      className="w-full px-3.5 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contact Phone</label>
+                    <input
+                      type="tel"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="w-full px-3.5 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Department</label>
                     <select
                       value={regDept}
                       onChange={(e) => setRegDept(e.target.value)}
-                      className="w-full px-2 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none"
+                      className="w-full px-2 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none [color-scheme:dark]"
                     >
                       <option>Computer Science</option>
-                      <option>Electrical Eng.</option>
-                      <option>Mechanical Eng.</option>
-                      <option>Business Admin.</option>
+                      <option>Information Technology</option>
+                      <option>Electrical Engineering</option>
+                      <option>Mechanical Engineering</option>
+                      <option>Civil Engineering</option>
+                      <option>Business Administration</option>
+                      <option>Data Science & AI</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Semester</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Semester</label>
                     <select
                       value={regSem}
                       onChange={(e) => setRegSem(e.target.value)}
-                      className="w-full px-2 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none"
+                      className="w-full px-2 py-2 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-300 outline-none [color-scheme:dark]"
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                        <option key={s} value={String(s)}>Semester {s}</option>
+                      {[
+                        { s: "1", y: "1st Year" },
+                        { s: "2", y: "1st Year" },
+                        { s: "3", y: "2nd Year" },
+                        { s: "4", y: "2nd Year" },
+                        { s: "5", y: "3rd Year" },
+                        { s: "6", y: "3rd Year" },
+                        { s: "7", y: "4th Year" },
+                        { s: "8", y: "4th Year" }
+                      ].map(({ s, y }) => (
+                        <option key={s} value={s}>Semester {s} ({y})</option>
                       ))}
                     </select>
                   </div>
@@ -1674,29 +1842,17 @@ export default function App() {
               <span>AI Campus BOT</span>
             </button>
 
-            {session.role === "ADMIN" && (
-              <>
-                <div className="px-3 pt-5 pb-2 text-[9px] uppercase tracking-widest font-bold text-indigo-400 font-mono">Governance</div>
-                <button
-                  onClick={() => setActiveTab("admin-center")}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all ${activeTab === "admin-center" ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/25 border border-indigo-500/30" : "hover:bg-white/[0.04] text-slate-400 hover:text-slate-200"}`}
-                >
-                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                  <span>Admin Center</span>
-                  <span className="ml-auto bg-indigo-500/20 text-indigo-300 font-bold px-1.5 py-0.5 rounded text-[9px] border border-indigo-400/30">MASTER</span>
-                </button>
-              </>
-            )}
+            <div className="px-3 pt-5 pb-2 text-[9px] uppercase tracking-widest font-bold text-slate-500 font-mono">Account</div>
+            <button
+              onClick={() => setActiveTab("profile")}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all ${activeTab === "profile" ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/25 border border-indigo-500/30" : "hover:bg-white/[0.04] text-slate-400 hover:text-slate-200"}`}
+            >
+              <User className="w-4 h-4" />
+              <span>{session.role === "STUDENT" ? "Student Profile" : "Admin Profile"}</span>
+            </button>
           </nav>
 
           <div className="p-4 border-t border-slate-800/60 space-y-2">
-            <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-[10px] font-mono font-bold border transition-all ${dbLoading ? "bg-amber-950/20 border-amber-900/40 text-amber-400" : "bg-emerald-950/20 border-emerald-900/40 text-emerald-400"}`}>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${dbLoading ? "bg-amber-400 animate-pulse" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"}`}></span>
-                <span>{dbLoading ? "SYNCING..." : "SUPABASE LINKED"}</span>
-              </div>
-              <span className="text-[9px] text-slate-500 font-normal">PRO</span>
-            </div>
             <button onClick={logout} className="w-full py-2.5 bg-slate-900/40 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border border-slate-800/80 hover:border-rose-900/40 transition-all cursor-pointer">
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out Account</span>
@@ -2394,7 +2550,7 @@ export default function App() {
                     return matchQ && matchC;
                   }).map(b => {
                     const isBorrowedByMe = borrowedBookIds.includes(b.id);
-                    const isAvailable = session.role === "ADMIN" ? (b.available === 1) : (!isBorrowedByMe);
+                    const isBookAvailable = b.available === 1;
                     return (
                       <div key={b.id} className="pro-card pro-card-hover rounded-2xl p-6 flex flex-col justify-between border border-white/[0.08] shadow-lg">
                         <div>
@@ -2402,13 +2558,25 @@ export default function App() {
                             <span className="text-[9px] bg-indigo-500/10 border border-indigo-400/25 text-indigo-300 px-2.5 py-0.5 rounded-md font-semibold font-mono uppercase">
                               {b.category}
                             </span>
-                            <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-semibold font-mono border ${
-                              isAvailable
-                                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
-                                : "bg-rose-500/10 text-rose-300 border-rose-500/25"
-                            }`}>
-                              {session.role === "ADMIN" ? (b.available === 1 ? "In Stock" : "Checked Out") : (isAvailable ? "Available" : "Borrowed by You")}
-                            </span>
+                            {session.role === "ADMIN" ? (
+                              <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-semibold font-mono border ${
+                                isBookAvailable
+                                  ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
+                                  : "bg-rose-500/10 text-rose-300 border-rose-500/25"
+                              }`}>
+                                {isBookAvailable ? "In Stock" : "Unavailable"}
+                              </span>
+                            ) : (
+                              <span className={`text-[9px] px-2.5 py-0.5 rounded-full font-semibold font-mono border ${
+                                isBorrowedByMe
+                                  ? "bg-amber-500/10 text-amber-300 border-amber-500/25"
+                                  : isBookAvailable
+                                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
+                                    : "bg-rose-500/10 text-rose-300 border-rose-500/25"
+                              }`}>
+                                {isBorrowedByMe ? "Borrowed by You" : (isBookAvailable ? "Available" : "Unavailable")}
+                              </span>
+                            )}
                           </div>
                           
                           <h4 className="font-bold text-white text-sm mb-1.5 leading-snug">{b.title}</h4>
@@ -2421,16 +2589,28 @@ export default function App() {
                             Reference Guide →
                           </a>
                           {session.role === "STUDENT" && (
-                            <button
-                              onClick={() => toggleBorrowBook(b.id)}
-                              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                                isBorrowedByMe
-                                  ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25"
-                                  : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20"
-                              }`}
-                            >
-                              {isBorrowedByMe ? "Return Book" : "Rent / Borrow"}
-                            </button>
+                            isBorrowedByMe ? (
+                              <button
+                                onClick={() => toggleBorrowBook(b.id)}
+                                className="px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25"
+                              >
+                                Return Book
+                              </button>
+                            ) : isBookAvailable ? (
+                              <button
+                                onClick={() => toggleBorrowBook(b.id)}
+                                className="px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20"
+                              >
+                                Rent / Borrow
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-800/80 text-slate-500 border border-slate-700/40 cursor-not-allowed opacity-75"
+                              >
+                                Unavailable
+                              </button>
+                            )
                           )}
                           {session.role === "ADMIN" && (
                             <div className="flex items-center gap-1.5">
@@ -2442,7 +2622,7 @@ export default function App() {
                                     : "bg-emerald-500/10 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/20"
                                 }`}
                               >
-                                {b.available === 1 ? "Mark Out" : "Mark In"}
+                                {b.available === 1 ? "Mark Unavailable" : "Mark Available"}
                               </button>
                               <button
                                 onClick={() => removeBook(b.id)}
@@ -3173,348 +3353,386 @@ export default function App() {
 
             {/* 10. PROFILE VIEW */}
             {activeTab === "profile" && (
-              <div className="max-w-xl mx-auto pro-card border border-white/[0.08] rounded-2xl shadow-2xl p-8 space-y-6">
-                <div className="text-center">
-                  <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-3xl font-extrabold text-white mx-auto mb-4 shadow-xl border border-indigo-400/30">
-                    {session.fullName.substring(0,1).toUpperCase()}
-                  </div>
-                  <h4 className="font-bold text-white text-lg leading-tight">{session.fullName}</h4>
-                  <span className="text-indigo-400 text-xs font-mono font-semibold block mt-1">
-                    User ID: {session.userId} · Role: {session.role}
-                  </span>
-                </div>
-
-                <div className="border-t border-white/[0.06] pt-5 space-y-3 text-xs">
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.04]">
-                    <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Academic Student ID</span>
-                    <span className="font-mono text-slate-200 font-semibold">{session.studentId}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.04]">
-                    <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Username Handle</span>
-                    <span className="text-slate-200 font-semibold font-mono">@{session.username}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.04]">
-                    <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Email Address</span>
-                    <span className="text-slate-200 font-semibold">{session.email}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2.5 border-b border-white/[0.04]">
-                    <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Department Desk</span>
-                    <span className="text-slate-200 font-semibold">{session.department}</span>
-                  </div>
-                  {session.role === "STUDENT" && (
-                    <div className="flex justify-between items-center py-2.5 border-b border-white/[0.04]">
-                      <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Current Semester</span>
-                      <span className="text-slate-200 font-semibold">{session.semester}th Semester</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 11. ADMIN CENTER & USER DIRECTORY SCREEN */}
-            {activeTab === "admin-center" && session.role === "ADMIN" && (
               <div className="space-y-6">
                 {/* Header Banner */}
                 <div className="pro-card rounded-2xl p-6 border border-white/[0.08] bg-gradient-to-br from-indigo-950/50 via-slate-900/70 to-slate-950/90 shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[9px] uppercase font-bold tracking-wider bg-indigo-500/10 border border-indigo-400/25 text-indigo-300 px-2.5 rounded-full py-0.5">
-                        Administrative Master Control
+                        {session.role === "STUDENT" ? "Student Academic Identity" : "Administrative Account"}
                       </span>
-                      <span className="text-[10px] font-mono text-emerald-400 font-semibold">
-                        ● Core Systems Operational
-                      </span>
-                    </div>
-                    <h2 className="text-2xl font-extrabold text-white tracking-tight">Admin Center &amp; User Directory</h2>
-                    <p className="text-slate-400 text-xs mt-1">Manage registered accounts, inspect live database links, and provision campus credentials.</p>
-                  </div>
-                </div>
-
-                {/* Diagnostics Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="pro-card pro-card-hover rounded-2xl p-5 shadow-lg flex items-center justify-between border border-white/[0.06]">
-                    <div>
-                      <span className="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block mb-1">Database Status</span>
-                      <span className="text-sm font-bold font-mono text-emerald-400">
-                        {systemHealth?.database === "connected" ? "Supabase Active" : "Supabase Linked"}
-                      </span>
-                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">ursquqpgofituzvhwmhk</span>
-                    </div>
-                    <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg shadow-inner">
-                      ⚡
-                    </div>
-                  </div>
-
-                  <div className="pro-card pro-card-hover rounded-2xl p-5 shadow-lg flex items-center justify-between border border-white/[0.06]">
-                    <div>
-                      <span className="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block mb-1">Render API</span>
-                      <span className="text-sm font-bold font-mono text-indigo-300">Production Live</span>
-                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">smartcampus-backend</span>
-                    </div>
-                    <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg shadow-inner">
-                      🌐
-                    </div>
-                  </div>
-
-                  <div className="pro-card pro-card-hover rounded-2xl p-5 shadow-lg flex items-center justify-between border border-white/[0.06]">
-                    <div>
-                      <span className="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block mb-1">Registered Users</span>
-                      <span className="text-sm font-bold font-mono text-white">{users.length} Accounts</span>
-                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">
-                        {users.filter(u => u.role === "STUDENT").length} Students · {users.filter(u => u.role === "ADMIN").length} Admins
+                      <span className="text-[10px] font-mono text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Verified Campus Member
                       </span>
                     </div>
-                    <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg shadow-inner">
-                      👥
-                    </div>
+                    <h2 className="text-2xl font-extrabold text-white tracking-tight">
+                      {session.role === "STUDENT" ? "Student Registration & Identity Profile" : "Campus Administrator Profile"}
+                    </h2>
+                    <p className="text-slate-400 text-xs mt-1">
+                      Official institutional credentials, academic status, and campus service engagement records.
+                    </p>
                   </div>
 
-                  <div className="pro-card pro-card-hover rounded-2xl p-5 shadow-lg flex items-center justify-between border border-white/[0.06]">
-                    <div>
-                      <span className="text-slate-400 text-[10px] uppercase font-semibold tracking-wider block mb-1">Pending Grievances</span>
-                      <span className="text-sm font-bold font-mono text-rose-400">
-                        {complaints.filter(c => c.status === "PENDING").length} Tickets
-                      </span>
-                      <span className="text-slate-500 text-[10px] block mt-0.5 font-mono">Complaints Desk</span>
-                    </div>
-                    <div className="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center text-lg shadow-inner">
-                      ⚠️
-                    </div>
-                  </div>
-                </div>
-
-                {/* Create New User Form */}
-                <form onSubmit={adminCreateUser} className="pro-card rounded-2xl p-6 shadow-xl space-y-4 border border-white/[0.08]">
-                  <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">👤 Register New Campus User</span>
-                      <span className="text-[9px] uppercase tracking-wider font-semibold text-indigo-400 font-mono bg-indigo-500/10 border border-indigo-400/25 px-2 py-0.5 rounded">
-                        User Provisioning
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
-                      <input
-                        type="text"
-                        value={newUserName}
-                        onChange={(e) => setNewUserName(e.target.value)}
-                        required
-                        placeholder="e.g. Rahul Sharma"
-                        className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Username Handle</label>
-                      <input
-                        type="text"
-                        value={newUserUsername}
-                        onChange={(e) => setNewUserUsername(e.target.value)}
-                        required
-                        placeholder="e.g. rahul24"
-                        className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
-                      <input
-                        type="email"
-                        value={newUserEmail}
-                        onChange={(e) => setNewUserEmail(e.target.value)}
-                        required
-                        placeholder="e.g. rahul@campus.edu"
-                        className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Temporary Password</label>
-                      <input
-                        type="text"
-                        value={newUserPassword}
-                        onChange={(e) => setNewUserPassword(e.target.value)}
-                        required
-                        placeholder="e.g. pass123"
-                        className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 font-mono transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Account Role</label>
-                      <select
-                        value={newUserRole}
-                        onChange={(e) => setNewUserRole(e.target.value as any)}
-                        className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 [color-scheme:dark]"
-                      >
-                        <option value="STUDENT">STUDENT</option>
-                        <option value="ADMIN">ADMIN</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-1">
+                  <div className="flex items-center gap-2.5">
                     <button
-                      type="submit"
-                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-600/20 flex items-center gap-1.5"
+                      onClick={copyStudentCredentials}
+                      className="px-3.5 py-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/[0.08] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Provision User Account</span>
+                      <Copy className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Copy Credentials</span>
+                    </button>
+                    <button
+                      onClick={openEditProfile}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-indigo-600/25"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit Profile</span>
                     </button>
                   </div>
-                </form>
+                </div>
 
-                {/* Users Directory Table */}
-                <div className="pro-card rounded-2xl overflow-hidden border border-white/[0.08] shadow-xl">
-                  <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-indigo-400" />
-                      <span className="font-bold text-white text-sm">Active Campus Users Directory</span>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  
+                  {/* Left Column: Official Digital Student ID Card (5 cols) */}
+                  <div className="lg:col-span-5 space-y-4">
+                    <div className="relative rounded-3xl p-6 overflow-hidden border border-indigo-500/30 bg-gradient-to-br from-[#0e1426] via-[#111936] to-[#0a0f22] shadow-2xl">
+                      {/* Holographic background glows */}
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                      <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                      <div className="relative z-10 space-y-5">
+                        {/* ID Card Top Header */}
+                        <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-sm shadow-md border border-white/20">
+                              🏛️
+                            </div>
+                            <div>
+                              <span className="font-black text-white text-xs tracking-wider block font-mono">SMARTCAMPUS ACADEMY</span>
+                              <span className="text-[8px] uppercase font-mono tracking-widest text-indigo-400 font-bold block">Official Identification Card</span>
+                            </div>
+                          </div>
+                          <div className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-[9px] font-mono font-bold flex items-center gap-1">
+                            <BadgeCheck className="w-3 h-3 text-emerald-400" />
+                            <span>ACTIVE</span>
+                          </div>
+                        </div>
+
+                        {/* ID Card User Overview */}
+                        <div className="flex items-center gap-4">
+                          <div className="relative shrink-0">
+                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center text-3xl font-black text-white shadow-xl border-2 border-indigo-400/40">
+                              {session.fullName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-[#0e1426] flex items-center justify-center text-[10px] text-white">
+                              ✓
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-extrabold text-white text-lg leading-tight truncate">
+                              {session.fullName}
+                            </h3>
+                            <span className="text-xs font-mono text-indigo-400 font-semibold block mt-0.5">
+                              @{session.username}
+                            </span>
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08] text-[10px] font-medium text-slate-300">
+                              <GraduationCap className="w-3 h-3 text-indigo-400" />
+                              <span>{session.role === "STUDENT" ? "Institutional Scholar" : "Campus Master Admin"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ID Card Key Parameters */}
+                        <div className="bg-slate-950/70 border border-white/[0.06] rounded-xl p-4 space-y-2.5 text-xs font-mono">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[10px] uppercase tracking-wider font-sans font-semibold">Student / User ID</span>
+                            <span className="text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                              {session.studentId || "STU-2024-001"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[10px] uppercase tracking-wider font-sans font-semibold">Department</span>
+                            <span className="text-slate-200 font-medium font-sans">
+                              {session.department || "Computer Science"}
+                            </span>
+                          </div>
+                          {session.role === "STUDENT" && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 text-[10px] uppercase tracking-wider font-sans font-semibold">Current Level</span>
+                              <span className="text-slate-200 font-medium font-sans">
+                                Semester {session.semester || "1"} ({Number(session.semester) <= 2 ? "1st Year" : Number(session.semester) <= 4 ? "2nd Year" : Number(session.semester) <= 6 ? "3rd Year" : "4th Year"})
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400 text-[10px] uppercase tracking-wider font-sans font-semibold">Valid Academic Term</span>
+                            <span className="text-slate-300 font-medium font-mono text-[11px]">
+                              2024 – 2028 Academic Cycle
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Barcode / Authenticity Seal */}
+                        <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                          <div className="space-y-0.5">
+                            <div className="h-4 flex items-center gap-[2px] opacity-70">
+                              {[2, 4, 1, 3, 2, 5, 2, 1, 4, 2, 3, 1, 5, 2, 3, 4, 1, 2, 5, 3, 2, 4, 1, 3, 2].map((w, idx) => (
+                                <span key={idx} className="bg-slate-400 inline-block h-full" style={{ width: `${w}px` }}></span>
+                              ))}
+                            </div>
+                            <span className="text-[8px] uppercase tracking-widest text-slate-500">SECURE DIGITAL CREDENTIAL</span>
+                          </div>
+                          <span className="font-semibold text-slate-400">{session.userId}</span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-xs text-slate-400 font-mono">{users.length} Total Users</span>
+
+                    {/* Quick credential card helpers */}
+                    <div className="pro-card rounded-2xl p-4 border border-white/[0.06] flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <UserCheck className="w-4 h-4 text-emerald-400" />
+                        <span>Account Status: <strong className="text-emerald-300 font-semibold">Verified &amp; Active</strong></span>
+                      </div>
+                      <button
+                        onClick={copyStudentCredentials}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer hover:underline"
+                      >
+                        Copy Details
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-950/80 border-b border-white/[0.06] uppercase font-semibold tracking-wider text-slate-400 text-[10px]">
-                          <th className="p-4">User</th>
-                          <th className="p-4">Login Handle</th>
-                          <th className="p-4">Email</th>
-                          <th className="p-4">Role</th>
-                          <th className="p-4">Dept / ID</th>
-                          <th className="p-4 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/[0.04]">
-                        {users.map(u => {
-                          const isSelf = u.userId === session.userId;
-                          return (
-                            <tr key={u.userId} className="hover:bg-white/[0.02] transition-colors">
-                              <td className="p-4">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 font-bold flex items-center justify-center text-xs shadow-inner">
-                                    {u.fullName.charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className="font-semibold text-white">{u.fullName}</span>
-                                </div>
-                              </td>
-                              <td className="p-4 font-mono text-slate-300">@{u.username}</td>
-                              <td className="p-4 text-slate-400">{u.email}</td>
-                              <td className="p-4">
-                                <span className={`px-2.5 py-0.5 rounded-md font-mono text-[10px] font-semibold border ${
-                                  u.role === "ADMIN"
-                                    ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/25"
-                                    : "bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
-                                }`}>
-                                  {u.role}
-                                </span>
-                              </td>
-                              <td className="p-4 text-slate-400 font-mono text-[11px]">{u.department} · {u.studentId}</td>
-                              <td className="p-4 text-right">
-                                <div className="flex items-center justify-end gap-2.5">
-                                  <button
-                                    onClick={() => openEditUser(u)}
-                                    className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline font-semibold cursor-pointer"
-                                  >
-                                    Edit
-                                  </button>
-                                  {!isSelf && (
-                                    <>
-                                      <span className="text-slate-750">|</span>
-                                      <button
-                                        onClick={() => adminDeleteUser(u.userId, u.fullName)}
-                                        className="text-xs text-rose-400 hover:text-rose-300 hover:underline font-semibold cursor-pointer"
-                                      >
-                                        Delete
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  {/* Right Column: Complete Registration Breakdown & Campus Activity Records (7 cols) */}
+                  <div className="lg:col-span-7 space-y-6">
+                    
+                    {/* Official Registration Record */}
+                    <div className="pro-card rounded-2xl p-6 border border-white/[0.08] shadow-xl space-y-5">
+                      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                        <div className="flex items-center gap-2">
+                          <GraduationCap className="w-4 h-4 text-indigo-400" />
+                          <h4 className="font-bold text-white text-sm">Official Academic Registration Details</h4>
+                        </div>
+                        <span className="text-[10px] font-mono font-semibold bg-indigo-500/10 text-indigo-300 px-2.5 py-0.5 rounded border border-indigo-500/20">
+                          {session.role}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Full Legal Name</span>
+                          <span className="font-bold text-white text-sm block">{session.fullName}</span>
+                        </div>
+
+                        <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Student Roll / ID</span>
+                          <span className="font-mono font-bold text-indigo-300 text-sm block">{session.studentId || "STU-2024-001"}</span>
+                        </div>
+
+                        <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                            <Mail className="w-3 h-3 text-slate-500" />
+                            <span>Institutional Email</span>
+                          </span>
+                          <span className="font-medium text-slate-200 block truncate">{session.email}</span>
+                        </div>
+
+                        <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-500" />
+                            <span>Contact Phone</span>
+                          </span>
+                          <span className="font-mono font-medium text-slate-200 block">
+                            {session.phone || "+91 98765 43210"}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Academic Department</span>
+                          <span className="font-semibold text-white block">{session.department || "Computer Science"}</span>
+                        </div>
+
+                        {session.role === "STUDENT" ? (
+                          <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Academic Semester Progress</span>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="font-bold text-white">Semester {session.semester || "1"} of 8</span>
+                              <span className="text-[10px] font-mono text-indigo-400">{Math.round(((Number(session.semester) || 1) / 8) * 100)}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                                style={{ width: `${Math.min(100, Math.max(12.5, ((Number(session.semester) || 1) / 8) * 100))}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-slate-950/50 p-3.5 rounded-xl border border-white/[0.04]">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Administrative Privileges</span>
+                            <span className="font-bold text-emerald-400 block">Full Master Control</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Campus Service Engagement Record */}
+                    <div className="pro-card rounded-2xl p-6 border border-white/[0.08] shadow-xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-indigo-400" />
+                          <h4 className="font-bold text-white text-sm">Student Campus Activity &amp; Services</h4>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">Live Synchronization</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <button
+                          onClick={() => setActiveTab("library")}
+                          className="bg-slate-950/60 hover:bg-slate-900/80 border border-white/[0.04] hover:border-indigo-500/30 p-3.5 rounded-xl text-left transition-all cursor-pointer group"
+                        >
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Books Loaned</span>
+                          <span className="text-xl font-bold font-mono text-white group-hover:text-indigo-400 transition-colors">
+                            {borrowedBookIds.length}
+                          </span>
+                          <span className="text-[9px] text-indigo-400 block mt-1">Smart Library →</span>
+                        </button>
+
+                        <button
+                          onClick={() => setActiveTab("assignments")}
+                          className="bg-slate-950/60 hover:bg-slate-900/80 border border-white/[0.04] hover:border-indigo-500/30 p-3.5 rounded-xl text-left transition-all cursor-pointer group"
+                        >
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Assignments</span>
+                          <span className="text-xl font-bold font-mono text-white group-hover:text-indigo-400 transition-colors">
+                            {assignments.length}
+                          </span>
+                          <span className="text-[9px] text-indigo-400 block mt-1">Class Tasks →</span>
+                        </button>
+
+                        <button
+                          onClick={() => setActiveTab("reminders")}
+                          className="bg-slate-950/60 hover:bg-slate-900/80 border border-white/[0.04] hover:border-indigo-500/30 p-3.5 rounded-xl text-left transition-all cursor-pointer group"
+                        >
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Reminders</span>
+                          <span className="text-xl font-bold font-mono text-white group-hover:text-indigo-400 transition-colors">
+                            {reminders.length}
+                          </span>
+                          <span className="text-[9px] text-indigo-400 block mt-1">My Alerts →</span>
+                        </button>
+
+                        <button
+                          onClick={() => setActiveTab("complaints")}
+                          className="bg-slate-950/60 hover:bg-slate-900/80 border border-white/[0.04] hover:border-indigo-500/30 p-3.5 rounded-xl text-left transition-all cursor-pointer group"
+                        >
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Help Desk</span>
+                          <span className="text-xl font-bold font-mono text-white group-hover:text-indigo-400 transition-colors">
+                            {complaints.filter(c => session.role === "ADMIN" || c.studentId === session.userId).length}
+                          </span>
+                          <span className="text-[9px] text-indigo-400 block mt-1">Tickets Desk →</span>
+                        </button>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
-                {/* Edit User Modal Dialog */}
-                {editingUser && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-                    <div className="bg-[#0c101c] border border-white/[0.1] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+                {/* Edit Profile Modal Dialog */}
+                {showEditProfile && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+                    <div className="bg-[#0b0f1d] border border-white/[0.1] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
                       <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
-                        <h4 className="font-bold text-white text-base flex items-center gap-2">
-                          <span>✏️ Edit User Account</span>
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <Edit3 className="w-4 h-4 text-indigo-400" />
+                          <h4 className="font-bold text-white text-base">Update Registration Credentials</h4>
+                        </div>
                         <button
-                          onClick={() => setEditingUser(null)}
-                          className="text-slate-400 hover:text-white text-sm font-bold cursor-pointer"
+                          onClick={() => setShowEditProfile(false)}
+                          className="text-slate-400 hover:text-white text-sm font-bold cursor-pointer transition-colors"
                         >
                           ✕
                         </button>
                       </div>
-                      <form onSubmit={adminUpdateUser} className="space-y-4">
+
+                      <form onSubmit={handleSaveProfile} className="space-y-3.5">
                         <div>
-                          <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Full Legal Name</label>
                           <input
                             type="text"
-                            value={editUserName}
-                            onChange={(e) => setEditUserName(e.target.value)}
+                            value={profFullName}
+                            onChange={(e) => setProfFullName(e.target.value)}
                             required
-                            className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 transition-all"
+                            className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 transition-all"
                           />
                         </div>
+
                         <div>
-                          <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
                           <input
                             type="email"
-                            value={editUserEmail}
-                            onChange={(e) => setEditUserEmail(e.target.value)}
+                            value={profEmail}
+                            onChange={(e) => setProfEmail(e.target.value)}
                             required
-                            className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 transition-all"
+                            className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 transition-all"
                           />
                         </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Contact Phone</label>
+                          <input
+                            type="tel"
+                            value={profPhone}
+                            onChange={(e) => setProfPhone(e.target.value)}
+                            placeholder="e.g. +91 98765 43210"
+                            className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 transition-all"
+                          />
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Account Role</label>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Department</label>
                             <select
-                              value={editUserRole}
-                              onChange={(e) => setEditUserRole(e.target.value as any)}
+                              value={profDept}
+                              onChange={(e) => setProfDept(e.target.value)}
                               className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 [color-scheme:dark]"
                             >
-                              <option value="STUDENT">STUDENT</option>
-                              <option value="ADMIN">ADMIN</option>
+                              <option>Computer Science</option>
+                              <option>Information Technology</option>
+                              <option>Electrical Engineering</option>
+                              <option>Mechanical Engineering</option>
+                              <option>Civil Engineering</option>
+                              <option>Business Administration</option>
+                              <option>Data Science & AI</option>
                             </select>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Department</label>
-                            <input
-                              type="text"
-                              value={editUserDept}
-                              onChange={(e) => setEditUserDept(e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 text-slate-200 transition-all"
-                            />
-                          </div>
+
+                          {session.role === "STUDENT" && (
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Current Semester</label>
+                              <select
+                                value={profSem}
+                                onChange={(e) => setProfSem(e.target.value)}
+                                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 [color-scheme:dark]"
+                              >
+                                {[
+                                  { s: "1", y: "1st Year" },
+                                  { s: "2", y: "1st Year" },
+                                  { s: "3", y: "2nd Year" },
+                                  { s: "4", y: "2nd Year" },
+                                  { s: "5", y: "3rd Year" },
+                                  { s: "6", y: "3rd Year" },
+                                  { s: "7", y: "4th Year" },
+                                  { s: "8", y: "4th Year" }
+                                ].map(({ s, y }) => (
+                                  <option key={s} value={s}>Semester {s} ({y})</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
-                        {editUserRole === "STUDENT" && (
-                          <div>
-                            <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Semester</label>
-                            <select
-                              value={editUserSem}
-                              onChange={(e) => setEditUserSem(e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs outline-none focus:border-indigo-500 text-slate-200 [color-scheme:dark]"
-                            >
-                              {["1", "2", "3", "4", "5", "6", "7", "8"].map(s => (
-                                <option key={s} value={s}>Semester {s}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
+
                         <div className="flex justify-end gap-2.5 pt-3 border-t border-white/[0.06]">
                           <button
                             type="button"
-                            onClick={() => setEditingUser(null)}
+                            onClick={() => setShowEditProfile(false)}
                             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
                           >
                             Cancel
@@ -3523,7 +3741,7 @@ export default function App() {
                             type="submit"
                             className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-600/20"
                           >
-                            Save Changes
+                            Save Credentials
                           </button>
                         </div>
                       </form>
